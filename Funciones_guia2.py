@@ -51,24 +51,14 @@ def es_univocamente_decodificable(codigo, conjunto=None):
     Entra: 'codigo' (lista de palabras código, en cualquier orden) y 'conjunto'
            (opcional; el set de esas palabras, ver no_singular()).
     Sale: True si el código es unívocamente decodificable, False si no.
-
-    Implementa el algoritmo de Sardinas-Patterson completo (no solo la primera
-    "generación"): arma el conjunto de sufijos pendientes comparando las
-    palabras código entre sí (generación 1); si algún sufijo coincide con una
-    palabra código, hay conflicto. Si no, arma la siguiente generación de
-    sufijos comparando los sufijos ya encontrados contra el código, y repite.
-    Si una generación se repite (ciclo) sin haber encontrado nunca un
-    conflicto, el código es unívocamente decodificable.
-
-    (Esto reemplaza la versión anterior, que solo evaluaba la primera
-    generación: eso hacía que códigos como {0, 01, 10} -que sí son ambiguos,
-    porque "010" se puede leer como '01'+'0' o como '0'+'10'- dieran
-    incorrectamente 'True'. Con las generaciones siguientes, el conflicto en
-    ese ejemplo aparece recién en la segunda: comparando el sufijo '1' contra
-    '10' se obtiene el sufijo '0', que sí es una palabra del código.)
+    
+    Implementa el algoritmo de Sardinas-Patterson con impresiones paso a paso.
     """
     if conjunto is None:
         conjunto = set(codigo)
+
+    print(f"\n--- Iniciando Teorema de Sardinas-Patterson ---")
+    print(f"Generación 0 (Código original): {conjunto}")
 
     # Generación 1: sufijos pendientes de comparar cada palabra código con las
     # demás palabras código de las que es prefijo.
@@ -77,10 +67,19 @@ def es_univocamente_decodificable(codigo, conjunto=None):
         for b in codigo:
             if a != b and b.startswith(a):
                 generacion.add(b[len(a):])
-    if any(sufijo in conjunto for sufijo in generacion):
+                
+    print(f"Generación 1 (Sufijos iniciales): {generacion}")
+    
+    # Verificamos conflicto en la Generación 1
+    interseccion = generacion.intersection(conjunto)
+    if interseccion:
+        print(f"❌ ¡Conflicto! En la Generación 1 el sufijo {interseccion} pertenece al código original.")
         return False
 
     generaciones_vistas = [frozenset(generacion)]
+    numero_generacion = 2
+
+    # Ciclo de generaciones siguientes
     while generacion:
         siguiente = set()
         for sufijo in generacion:
@@ -89,12 +88,26 @@ def es_univocamente_decodificable(codigo, conjunto=None):
                     siguiente.add(sufijo[len(c):])
                 elif c.startswith(sufijo):
                     siguiente.add(c[len(sufijo):])
-        if any(s in conjunto for s in siguiente):
+                    
+        print(f"Generación {numero_generacion}: {siguiente}")
+        
+        # 1. Condición de parada por conflicto (no unívocamente decodificable)
+        interseccion = siguiente.intersection(conjunto)
+        if interseccion:
+            print(f"En la Generación {numero_generacion} el sufijo {interseccion} pertenece al código original.")
             return False
+            
+        # 2. Condición de parada por ciclo infinito sin conflictos (unívocamente decodificable)
         if frozenset(siguiente) in generaciones_vistas:
+            print(f"La Generación {numero_generacion} ya apareció antes. ¡Se detectó un ciclo cerrado sin conflictos!")
             return True
+            
         generaciones_vistas.append(frozenset(siguiente))
         generacion = siguiente
+        numero_generacion += 1
+
+    # 3. Condición de parada por conjunto vacío (unívocamente decodificable)
+    print("✅ No se generaron más sufijos nuevos (Generación vacía).")
     return True
 
 
@@ -273,8 +286,8 @@ def generar_mensaje_codificado(n, codigo, probabilidades):
 def main():
     # ------------------------------------------------------------------
     # --- ÚNICA ENTRADA: el código y la probabilidad de cada palabra ---
-    codigo = ['0', '10', '110', '111']
-    probabilidades = [0.4, 0.3, 0.2, 0.1]
+    codigo = ['/', '*', '-', '*', '++', '+-']
+    probabilidades = [0.10, 0.50, 0.10, 0.20, 0.05, 0.05]
 
     # --- Parámetro secundario (editable) ---
     n_a_generar = 15   # cantidad de símbolos a generar (ej. 16)

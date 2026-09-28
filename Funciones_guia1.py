@@ -62,6 +62,26 @@ def alfabeto_y_frecuencias(lista_simbolos):
     return alfabeto, frecuencias
 
 
+def extraer_simbolos_de_texto(texto, simbolos_de_interes=None):
+    """
+    Pre: 'texto' es un string cualquiera (por ejemplo, un párrafo tal cual está
+         escrito, sin espacios agregados a mano entre los signos). 'simbolos_de_interes'
+         es opcional: una lista o string con los caracteres que se quieren contar como
+         los "símbolos" emitidos por la fuente (por ejemplo, ['.', ',', ';', ':']).
+         Si no se pasa (o se pasa None), se toman TODOS los caracteres del texto como
+         símbolos, letra por letra (incluyendo espacios y saltos de línea).
+    Post: retorna una lista con los caracteres de 'texto' (todos, o solo los que están
+          en 'simbolos_de_interes' si se especificó), en el orden en que aparecen. El
+          alfabeto no hace falta indicarlo aparte: alfabeto_y_frecuencias() lo arma
+          solo a partir de lo que aparezca en esta lista.
+    """
+    mensaje = []
+    for caracter in texto:
+        if simbolos_de_interes is None or caracter in simbolos_de_interes:
+            mensaje.append(caracter)
+    return mensaje
+
+
 def frecuencias_a_probabilidades(frecuencias, total):
     """
     Pre: 'frecuencias' es una lista de enteros >= 0; 'total' es la cantidad total
@@ -138,17 +158,20 @@ def extension_orden_n(alfabeto, probabilidades, n):
 def vector_estacionario(matriz, tolerancia=0.001, max_iteraciones=1000):
     """
     Pre: 'matriz' es una matriz de transición cuadrada (lista de listas) donde
-         cada fila suma 1. 'tolerancia' es la diferencia máxima admitida entre
-         iteraciones sucesivas para considerar que convergió.
+         cada COLUMNA suma 1 (matriz[fila][columna] = P(estado destino = fila |
+         estado origen = columna) — la convención de la cátedra). 'tolerancia'
+         es la diferencia máxima admitida entre iteraciones sucesivas para
+         considerar que convergió.
     Post: retorna el vector estacionario (lista de floats) de la cadena de
-          Markov representada por 'matriz', calculado por iteración de potencias.
+          Markov representada por 'matriz', calculado por iteración de potencias
+          (v_nuevo = matriz * v_actual, producto matriz por vector columna).
           Si no converge en 'max_iteraciones', retorna la última aproximación.
     """
     n = len(matriz)
     vector_actual = [1 / n] * n
     for _ in range(max_iteraciones):
         vector_nuevo = [
-            sum(vector_actual[i] * matriz[i][j] for i in range(n)) for j in range(n)
+            sum(matriz[i][j] * vector_actual[j] for j in range(n)) for i in range(n)
         ]
         if all(abs(vector_nuevo[k] - vector_actual[k]) <= tolerancia for k in range(n)):
             return vector_nuevo
@@ -158,18 +181,19 @@ def vector_estacionario(matriz, tolerancia=0.001, max_iteraciones=1000):
 
 def entropia_markov(matriz, tolerancia=0.001):
     """
-    Pre: 'matriz' es una matriz de transición válida (cada fila suma 1).
+    Pre: 'matriz' es una matriz de transición válida en la convención de columna
+         = origen (cada columna suma 1).
     Post: retorna la entropía de la fuente de Markov, ponderando la entropía de
-          cada fila (estado) por su probabilidad estacionaria.
+          cada estado origen (columna) por su probabilidad estacionaria.
     """
     v_est = vector_estacionario(matriz, tolerancia)
     n = len(matriz)
     total = 0
-    for i in range(n):
-        fila_entropia = sum(
-            matriz[i][j] * log(1 / matriz[i][j], 2) for j in range(n) if matriz[i][j] > 0
+    for j in range(n):
+        columna_entropia = sum(
+            matriz[i][j] * log(1 / matriz[i][j], 2) for i in range(n) if matriz[i][j] > 0
         )
-        total += v_est[i] * fila_entropia
+        total += v_est[j] * columna_entropia
     return total
 
 
@@ -178,60 +202,66 @@ def matriz_transicion_desde_mensaje(lista_simbolos, alfabeto):
     Pre: 'lista_simbolos' es la secuencia de símbolos emitidos por la fuente;
          'alfabeto' es la lista de símbolos únicos (por ejemplo, obtenida con
          alfabeto_y_frecuencias).
-    Post: retorna la matriz de transición (lista de listas) estimada contando
-          pares consecutivos en 'lista_simbolos' y normalizando cada fila para
-          que sume 1. Si un símbolo nunca aparece como origen, su fila queda en 0.
+    Post: retorna la matriz de transición (lista de listas), en la convención de
+          la cátedra: matriz[fila][columna] = P(destino=fila | origen=columna),
+          es decir, cada COLUMNA suma 1. Se arma contando pares consecutivos en
+          'lista_simbolos' y normalizando cada columna. Si un símbolo nunca
+          aparece como origen, su columna queda en 0.
     """
     n = len(alfabeto)
     matriz = [[0] * n for _ in range(n)]
     for i in range(len(lista_simbolos) - 1):
-        fila = alfabeto.index(lista_simbolos[i])
-        columna = alfabeto.index(lista_simbolos[i + 1])
-        matriz[fila][columna] += 1
-    for fila in matriz:
-        total_fila = sum(fila)
-        if total_fila > 0:
-            for j in range(n):
-                fila[j] /= total_fila
+        origen = alfabeto.index(lista_simbolos[i])
+        destino = alfabeto.index(lista_simbolos[i + 1])
+        matriz[destino][origen] += 1
+    for columna in range(n):
+        total_columna = sum(matriz[fila][columna] for fila in range(n))
+        if total_columna > 0:
+            for fila in range(n):
+                matriz[fila][columna] /= total_columna
     return matriz
 
 
 def generar_cadena_markov(alfabeto, matriz, n):
     """
-    Pre: 'alfabeto' y 'matriz' representan una fuente de Markov (matriz cuadrada,
-         cada fila suma 1); 'n' es la longitud deseada de la cadena (>= 1).
+    Pre: 'alfabeto' y 'matriz' representan una fuente de Markov en la convención
+         columna = origen (matriz cuadrada, cada columna suma 1); 'n' es la
+         longitud deseada de la cadena (>= 1).
     Post: retorna una lista de n símbolos generados simulando la fuente. El
           primer símbolo se elige según el vector estacionario; los siguientes,
-          según la fila de la matriz correspondiente al símbolo anterior.
+          según la COLUMNA de la matriz correspondiente al símbolo anterior
+          (esa columna es la distribución de probabilidad del próximo símbolo).
     """
     v_est = vector_estacionario(matriz)
     fiacum_est = frecuencia_acumulada(v_est)
     simbolo_actual = elegir_simbolo(alfabeto, fiacum_est)
     cadena = [simbolo_actual]
     for _ in range(n - 1):
-        fila = matriz[alfabeto.index(simbolo_actual)]
-        fiacum_fila = frecuencia_acumulada(fila)
-        simbolo_actual = elegir_simbolo(alfabeto, fiacum_fila)
+        columna = alfabeto.index(simbolo_actual)
+        probs_columna = [matriz[fila][columna] for fila in range(len(alfabeto))]
+        fiacum_columna = frecuencia_acumulada(probs_columna)
+        simbolo_actual = elegir_simbolo(alfabeto, fiacum_columna)
         cadena.append(simbolo_actual)
     return cadena
 
 
 def es_memoria_nula(matriz, tolerancia):
     """
-    Pre: 'matriz' es una matriz de transición cuadrada (lista de listas);
-         'tolerancia' es la diferencia máxima admitida entre filas para
-         considerarlas "iguales".
-    Post: retorna True si todas las filas de 'matriz' son iguales entre sí
-          (dentro de la tolerancia) -> fuente de memoria nula.
-          Retorna False si al menos una fila difiere -> fuente con memoria.
+    Pre: 'matriz' es una matriz de transición cuadrada en la convención columna
+         = origen; 'tolerancia' es la diferencia máxima admitida entre columnas
+         para considerarlas "iguales".
+    Post: retorna True si todas las COLUMNAS de 'matriz' son iguales entre sí
+          (dentro de la tolerancia) -> fuente de memoria nula (el próximo
+          símbolo no depende del origen). Retorna False si alguna columna
+          difiere -> fuente con memoria.
     """
     n = len(matriz)
     if n <= 1:
         return True
-    fila_ref = matriz[0]
-    for i in range(1, n):
-        for j in range(n):
-            if abs(matriz[i][j] - fila_ref[j]) > tolerancia:
+    columna_ref = [matriz[fila][0] for fila in range(n)]
+    for columna in range(1, n):
+        for fila in range(n):
+            if abs(matriz[fila][columna] - columna_ref[fila]) > tolerancia:
                 return False
     return True
 
@@ -241,14 +271,16 @@ def es_memoria_nula(matriz, tolerancia):
 # =============================================================================
 
 def main():
-    # ------------------------------------------------------------------
+# ------------------------------------------------------------------
     # --- ÚNICA ENTRADA: el mensaje emitido por la fuente ---
-    mensaje = "A B C C A B B A C A".split()
+    # Opción 1: mensaje "genérico" tipeado a mano, símbolo por símbolo, separado
+    # por espacios (para fuentes con cualquier alfabeto, no solo puntuación).
+    mensaje = "; ; , ; , ; : , , , . ; , , . , , , : : , ; ; ; , : ; . , , ; : , , , : . . ; , ; ; . , ; , , . : ; ".split()
 
     # --- Parámetros secundarios (editables) ---
     longitud_simulacion = 10   # longitud de las cadenas a generar (ej. 2b y 15b)
     orden_extension = 3        # orden N de la extensión (ej. 10)
-    tolerancia = 0.01          # tolerancia para vector estacionario / memoria nula (ej. 14 y 15c)
+    tolerancia = 0.0001          # tolerancia para vector estacionario / memoria nula (ej. 14 y 15c)
     # ------------------------------------------------------------------
 
     print("=" * 70)
