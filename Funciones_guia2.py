@@ -73,7 +73,7 @@ def es_univocamente_decodificable(codigo, conjunto=None):
     # Verificamos conflicto en la Generación 1
     interseccion = generacion.intersection(conjunto)
     if interseccion:
-        print(f"❌ ¡Conflicto! En la Generación 1 el sufijo {interseccion} pertenece al código original.")
+        print(f"En la Generación 1 el sufijo {interseccion} pertenece al código original.")
         return False
 
     generaciones_vistas = [frozenset(generacion)]
