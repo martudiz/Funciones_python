@@ -286,8 +286,8 @@ def generar_mensaje_codificado(n, codigo, probabilidades):
 def main():
     # ------------------------------------------------------------------
     # --- ÚNICA ENTRADA: el código y la probabilidad de cada palabra ---
-    codigo = ['/', '*', '-', '*', '++', '+-']
-    probabilidades = [0.10, 0.50, 0.10, 0.20, 0.05, 0.05]
+    codigo = ['CA', 'B', 'CB', 'CC', 'A']
+    probabilidades = [0.11, 0.33, 0.11, 0.11, 0.33]
 
     # --- Parámetro secundario (editable) ---
     n_a_generar = 15   # cantidad de símbolos a generar (ej. 16)
