@@ -1021,8 +1021,8 @@ bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [144
 mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
-entradaCanal = ""                    # si te dan las secuencias, ej: "AABBBCCABC"
-salidaCanal = ""                     #                           ej: "AABCBCCBBC"
+entradaCanal = "AABBBCCABC"
+salidaCanal = "AABCBCCBBC"
 probPriori = []                      # si te dan la matriz, ej: [0.5, 0.5]
 matrizCanal = []                     #                     ej: [[0.9, 0.1], [0.1, 0.9]]
 pasoCapacidad = 0.0001
