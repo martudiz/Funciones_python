@@ -1088,7 +1088,6 @@ def informe_canales_serie(matriz1, matriz2):
     etiq_cols = [f"c{k + 1}" for k in range(len(compuesta[0]))]
     imprimo_matriz(compuesta, etiq_filas, etiq_cols)
 
-
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -1097,38 +1096,37 @@ def informe_canales_serie(matriz1, matriz2):
 Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
-mensaje = "" #"ABCDABCBDCBAAABBBCBCBABADBCBABCBDBCCCAAABB"   # msj de la consigna
+mensaje = ""   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
 mensajeBits = ""
-codigoDado = ["11", "01", "00", "10"]
+codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
-ordenExt = 3                         # orden de la extension
+ordenExt = 1                         # orden de la extension
 metodo = "huffman"                   # "huffman" o "shannon-fano"
 
 # --- 2) CODIGO DADO CON SUS PROBABILIDADES ---
-codigoAnalizar = ["0", "01", "11"]
-probsCodigo = [0.5, 0.3, 0.2]
-ordenCodigo = 1                     # N si el codigo es para la extension de orden N
+codigoAnalizar = ["0", "10", "11"]                  # ej: ['(]', ']', '[)', ')', '([']
+probsCodigo = [0.5 , 0.25 , 0.25]                     # ej: [0.15, 0.25, 0.05, 0.45, 0.10]
+ordenCodigo = 1                      # N si el codigo es para la extension de orden N
 
 # --- 3) HAMMING ---
 codigoBloque = []                    # ej: ["00000", "01101", "10110", "11011"]
 
 # --- 4) PARIDAD ---
-textoParidad = "HOLA"                    # ej: "HOLA"
-errores = [(1, 5)]
-bytesRecibidos = [20, 144, 159, 153, 130]              # si te dan la secuencia recibida, ej: [144, 159, 153, 130, 20]
+textoParidad = ""                    # ej: "HOLA"
+errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte 1 (el byte 0 es el LRC)
+bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
 # --- 5) RLC ---
 mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
-entradaCanal = ""#"AABBBCCABC"
-salidaCanal = ""#"AABCBCCBBC"
+entradaCanal = ""
+salidaCanal = ""
 probPriori = []                      # si te dan la matriz, ej: [0.5, 0.5]
 matrizCanal = []                     #                     ej: [[0.9, 0.1], [0.1, 0.9]]
-pasoCapacidad = 0 #0.0001
+pasoCapacidad = 0.001
 matrizCanal2 = []                    # segundo canal, solo si piden canales en serie
-
 
 if __name__ == "__main__":
 
@@ -1160,7 +1158,7 @@ if __name__ == "__main__":
         informe_hamming(codigoBloque)
 
     # 4) PARIDAD
-    if textoParidad != "":
+    if textoParidad != "" or len(bytesRecibidos) > 0:
         informe_paridad(textoParidad, errores, bytesRecibidos)
 
     # 5) RLC
