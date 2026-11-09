@@ -131,7 +131,98 @@ def analizar_rendimiento_y_redundancia(probabilidades, codificacion):
     rendimiento = calcular_rendimiento(entropia_r, L)
     redundancia = calcular_redundancia(rendimiento)
     return rendimiento, redundancia
+# =============================================================================
+# CLASIFICACION DE CODIGOS
+# =============================================================================
+def es_instantaneo(codigo_ordenado):
+    """
+    Entra: 'codigo_ordenado', la lista de palabras código YA ORDENADA
+           alfabéticamente (ordenar antes alcanza para detectar cualquier
+           relación de prefijo: toda palabra que extiende a otra queda
+           inmediatamente después de ella al ordenar).
+    Sale: True si ninguna palabra es prefijo de otra (código instantáneo /
+          libre de prefijos); False si encuentra alguna.
+    """
+    for i in range(len(codigo_ordenado) - 1):
+        actual = codigo_ordenado[i]
+        siguiente = codigo_ordenado[i + 1]
+        if siguiente.startswith(actual):
+            return False
+    return True
 
+def no_singular(codigo):
+    """
+    Entra: 'codigo', lista de strings con las palabras código.
+    Sale: (es_no_singular, conjunto), donde es_no_singular es True si todas las
+          palabras son distintas entre sí, y 'conjunto' es el set de palabras
+          código (se reutiliza en es_univocamente_decodificable()).
+    """
+    conjunto = set(codigo)
+    return len(conjunto) == len(codigo), conjunto
+
+def es_univocamente_decodificable(codigo, conjunto=None):
+    """
+    Entra: 'codigo' (lista de palabras código, en cualquier orden) y 'conjunto'
+           (opcional; el set de esas palabras, ver no_singular()).
+    Sale: True si el código es unívocamente decodificable, False si no.
+    
+    Implementa el algoritmo de Sardinas-Patterson con impresiones paso a paso.
+    """
+    if conjunto is None:
+        conjunto = set(codigo)
+
+    print(f"\n--- Iniciando Teorema de Sardinas-Patterson ---")
+    print(f"Generación 0 (Código original): {conjunto}")
+
+    # Generación 1: sufijos pendientes de comparar cada palabra código con las
+    # demás palabras código de las que es prefijo.
+    generacion = set()
+    for a in codigo:
+        for b in codigo:
+            if a != b and b.startswith(a):
+                generacion.add(b[len(a):])
+                
+    print(f"Generación 1 (Sufijos iniciales): {generacion}")
+    
+    # Verificamos conflicto en la Generación 1
+    interseccion = generacion.intersection(conjunto)
+    if interseccion:
+        print(f"En la Generación 1 el sufijo {interseccion} pertenece al código original.")
+        return False
+
+    generaciones_vistas = [frozenset(generacion)]
+    numero_generacion = 2
+
+    # Ciclo de generaciones siguientes
+    while generacion:
+        siguiente = set()
+        for sufijo in generacion:
+            for c in codigo:
+                if sufijo.startswith(c):
+                    siguiente.add(sufijo[len(c):])
+                elif c.startswith(sufijo):
+                    siguiente.add(c[len(sufijo):])
+                    
+        print(f"Generación {numero_generacion}: {siguiente}")
+        
+        # 1. Condición de parada por conflicto (no unívocamente decodificable)
+        interseccion = siguiente.intersection(conjunto)
+        if interseccion:
+            print(f"En la Generación {numero_generacion} el sufijo {interseccion} pertenece al código original.")
+            return False
+            
+        # 2. Condición de parada por ciclo infinito sin conflictos (unívocamente decodificable)
+        if frozenset(siguiente) in generaciones_vistas:
+            print(f"La Generación {numero_generacion} ya apareció antes. ¡Se detectó un ciclo cerrado sin conflictos!")
+            return True
+            
+        generaciones_vistas.append(frozenset(siguiente))
+        generacion = siguiente
+        numero_generacion += 1
+
+    # 3. Condición de parada por conjunto vacío (unívocamente decodificable)
+    print("✅ No se generaron más sufijos nuevos (Generación vacía).")
+    return True
 
 # =============================================================================
 # CODIGOS OPTIMOS Y COMPRESION
@@ -400,7 +491,7 @@ def calcular_lrc(matriz):
 def codificar_mensaje(cadena):
     matriz = generar_matriz_bits(cadena)
     fila_lrc = calcular_lrc(matriz)
-    matriz.append(fila_lrc)            # LRC como ULTIMO byte
+    matriz.insert(0, fila_lrc)         # LRC como PRIMER byte
 
     secuencia_bytes = bytearray()
     for i in range(len(matriz)):
@@ -429,8 +520,7 @@ def decodificar_y_corregir(secuencia_bytes):
     # filas de datos con paridad mal (la ultima fila es el LRC)
     error_fila = -1
     conteo_errores_filas = 0
-    filas_datos = len(matriz) - 1
-    for i in range(filas_datos):
+    for i in range(1, len(matriz)):
         suma_fila = 0
         for j in range(8):
             suma_fila += matriz[i][j]
@@ -461,7 +551,7 @@ def decodificar_y_corregir(secuencia_bytes):
         return ""
 
     mensaje = ""
-    for i in range(filas_datos):
+    for i in range(1, len(matriz)):
         ascii_val = 0
         for j in range(7):          # los 7 bits ASCII, se descarta el de paridad
             ascii_val = (ascii_val << 1) | matriz[i][j]
@@ -870,6 +960,17 @@ def informe_compresion(alfabeto, codigos, mensaje):
 
 def informe_codigo_dado(probs, codigo, N):
     imprimo_titulo("CODIGO DADO: RENDIMIENTO, REDUNDANCIA Y PRIMER TEOREMA")
+    es_no_singular, conjunto = no_singular(codigo)
+    print(f"  No singular: {es_no_singular}")
+    if es_no_singular:
+        instantaneo = es_instantaneo(sorted(codigo))
+        print(f"  Instantaneo: {instantaneo}")
+        if instantaneo:
+            print("  Univocamente decodificable: True (todo instantaneo lo es)")
+        else:
+            print(f"  Univocamente decodificable: {es_univocamente_decodificable(codigo, conjunto)}")
+    else:
+        print("  Instantaneo: False   Univocamente decodificable: False")
     r = calcular_r(codigo)
     if N == 1:
         rendimiento, redundancia = analizar_rendimiento_y_redundancia(probs, codigo)
@@ -902,7 +1003,7 @@ def informe_paridad(texto, errores, bytes_recibidos):
         print(f"    '{c}'  ASCII {ord(c):>3} = {format(ord(c), '07b')}  ->  {format(byte, '08b')} ({byte})  verifica: {ok}")
 
     secuencia = codificar_mensaje(texto)
-    print("\n  Paridad cruzada (cada fila = 7 bits + VRC, ultimo byte = LRC):")
+    print("\n  Paridad cruzada (cada fila = 7 bits + VRC, primer byte = LRC):")
     for b in secuencia:
         print(f"    {format(b, '08b')}  ({b})")
     print(f"  Bytes: {list(secuencia)}")
@@ -996,36 +1097,36 @@ def informe_canales_serie(matriz1, matriz2):
 Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
-mensaje = "ABCDABCBDCBAAABBBCBCBABADBCBABCBDBCCCAAABB"   # msj de la consigna
+mensaje = "" #"ABCDABCBDCBAAABBBCBCBABADBCBABCBDBCCCAAABB"   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
-mensajeBits = "1100111001111001"
+mensajeBits = ""
 codigoDado = ["11", "01", "00", "10"]
 alfabetoDado = []  # ([] => S1, S2, ...)
 ordenExt = 3                         # orden de la extension
 metodo = "huffman"                   # "huffman" o "shannon-fano"
 
 # --- 2) CODIGO DADO CON SUS PROBABILIDADES ---
-codigoAnalizar = []                  # ej: ['(]', ']', '[)', ')', '([']
-probsCodigo = []                     # ej: [0.15, 0.25, 0.05, 0.45, 0.10]
-ordenCodigo = 1                      # N si el codigo es para la extension de orden N
+codigoAnalizar = ["0", "01", "11"]
+probsCodigo = [0.5, 0.3, 0.2]
+ordenCodigo = 1                     # N si el codigo es para la extension de orden N
 
 # --- 3) HAMMING ---
 codigoBloque = []                    # ej: ["00000", "01101", "10110", "11011"]
 
 # --- 4) PARIDAD ---
-textoParidad = ""                    # ej: "HOLA"
-errores = []                         # ej: [(0, 5)] = invierte el bit 5 del byte 0
-bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [144, 159, 153, 130, 20]
+textoParidad = "HOLA"                    # ej: "HOLA"
+errores = [(1, 5)]
+bytesRecibidos = [20, 144, 159, 153, 130]              # si te dan la secuencia recibida, ej: [144, 159, 153, 130, 20]
 
 # --- 5) RLC ---
 mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
-entradaCanal = "AABBBCCABC"
-salidaCanal = "AABCBCCBBC"
+entradaCanal = ""#"AABBBCCABC"
+salidaCanal = ""#"AABCBCCBBC"
 probPriori = []                      # si te dan la matriz, ej: [0.5, 0.5]
 matrizCanal = []                     #                     ej: [[0.9, 0.1], [0.1, 0.9]]
-pasoCapacidad = 0.0001
+pasoCapacidad = 0 #0.0001
 matrizCanal2 = []                    # segundo canal, solo si piden canales en serie
 
 
