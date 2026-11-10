@@ -388,7 +388,7 @@ def tasa_compresion(mensaje, secuencia):
     # cada simbolo original ocupa 1 byte (ASCII)
     tamano_original = len(mensaje)
     tamano_comprimido = len(secuencia)
-    return tamano_original / tamano_comprimido
+    return tamano_original / (tamano_comprimido - 1)
 
 
 def comprimir_rlc(mensaje):
@@ -953,7 +953,7 @@ def informe_compresion(alfabeto, codigos, mensaje):
     print(f"  Bits          : {bits}  ({len(bits)} bits)")
     print(f"  Bytes         : {list(secuencia)}  ({len(secuencia)} bytes, el 1ro = bits de relleno = {secuencia[0]})")
     print(f"  En binario    : {' '.join(format(b, '08b') for b in secuencia)}")
-    print(f"  Tasa de compresion = {len(mensaje)} / {len(secuencia)} = {fmt(tasa_compresion(mensaje, secuencia))} : 1")
+    print(f"  Tasa de compresion = {len(mensaje)} / {len(secuencia)- 1} = {fmt(tasa_compresion(mensaje, secuencia))} : 1")
     recuperado = decodificar(alfabeto, codigos, secuencia)
     print(f"  Decodificado  : {recuperado}  (coincide: {recuperado == ''.join(mensaje)})")
 
@@ -1096,24 +1096,25 @@ def informe_canales_serie(matriz1, matriz2):
 Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
-mensaje = ""   # msj de la consigna
+mensaje = "GIIHGGGHGIHHIHIIGFHH"   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
 mensajeBits = ""
 codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
-ordenExt = 1                         # orden de la extension
+ordenExt = 2                         # orden de la extension
 metodo = "huffman"                   # "huffman" o "shannon-fano"
 
 # --- 2) CODIGO DADO CON SUS PROBABILIDADES ---
-codigoAnalizar = ["0", "10", "11"]                  # ej: ['(]', ']', '[)', ')', '([']
-probsCodigo = [0.5 , 0.25 , 0.25]                     # ej: [0.15, 0.25, 0.05, 0.45, 0.10]
-ordenCodigo = 1                      # N si el codigo es para la extension de orden N
+codigoAnalizar = []                  # ej: ['(]', ']', '[)', ')', '([']
+probsCodigo = []                     # ej: [0.15, 0.25, 0.05, 0.45, 0.10]
+ordenCodigo = 0                    # N si el codigo es para la extension de orden N
 
 # --- 3) HAMMING ---
 codigoBloque = []                    # ej: ["00000", "01101", "10110", "11011"]
 
 # --- 4) PARIDAD ---
 textoParidad = ""                    # ej: "HOLA"
+bitsRecibidos = "10100000101011101001111110011001"     # ej: "10100000101011101001111110011001"
 errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte 1 (el byte 0 es el LRC)
 bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
@@ -1121,8 +1122,8 @@ bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20,
 mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
-entradaCanal = ""
-salidaCanal = ""
+entradaCanal = "10100000101011101001111110011001"
+salidaCanal = "QQPQQPPQQQPQRRRQSPQSQRQSQQPSQQPP"
 probPriori = []                      # si te dan la matriz, ej: [0.5, 0.5]
 matrizCanal = []                     #                     ej: [[0.9, 0.1], [0.1, 0.9]]
 pasoCapacidad = 0.001
@@ -1156,8 +1157,13 @@ if __name__ == "__main__":
     # 3) HAMMING
     if len(codigoBloque) > 0:
         informe_hamming(codigoBloque)
-
+    
     # 4) PARIDAD
+    if bitsRecibidos != "":
+        bytesRecibidos = []
+        for k in range(0, len(bitsRecibidos), 8):
+            bytesRecibidos.append(int(bitsRecibidos[k:k + 8], 2))
+
     if textoParidad != "" or len(bytesRecibidos) > 0:
         informe_paridad(textoParidad, errores, bytesRecibidos)
 
