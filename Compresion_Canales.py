@@ -388,7 +388,7 @@ def tasa_compresion(mensaje, secuencia):
     # cada simbolo original ocupa 1 byte (ASCII)
     tamano_original = len(mensaje)
     tamano_comprimido = len(secuencia)
-    return tamano_original / (tamano_comprimido - 1)
+    return tamano_original / tamano_comprimido
 
 
 def comprimir_rlc(mensaje):
@@ -953,7 +953,7 @@ def informe_compresion(alfabeto, codigos, mensaje):
     print(f"  Bits          : {bits}  ({len(bits)} bits)")
     print(f"  Bytes         : {list(secuencia)}  ({len(secuencia)} bytes, el 1ro = bits de relleno = {secuencia[0]})")
     print(f"  En binario    : {' '.join(format(b, '08b') for b in secuencia)}")
-    print(f"  Tasa de compresion = {len(mensaje)} / {len(secuencia)- 1} = {fmt(tasa_compresion(mensaje, secuencia))} : 1")
+    print(f"  Tasa de compresion = {len(mensaje)} / {len(secuencia)- 1} = {fmt(tasa_compresion(mensaje, secuencia[1:]))} : 1")
     recuperado = decodificar(alfabeto, codigos, secuencia)
     print(f"  Decodificado  : {recuperado}  (coincide: {recuperado == ''.join(mensaje)})")
 
@@ -994,8 +994,8 @@ def informe_hamming(codigo):
     print(f"  Corrige  (d - 1) // 2 = {corregibles} errores")
 
 
-def informe_paridad(texto, errores, bytes_recibidos):
-    imprimo_titulo("PARIDAD")
+def informe_paridad_texto(texto, errores):
+    imprimo_titulo("PARIDAD: CODIFICAR UN TEXTO")
     print("  Paridad simple (LSB, paridad par):")
     for c in texto:
         byte = codificar_con_paridad(c)
@@ -1016,9 +1016,11 @@ def informe_paridad(texto, errores, bytes_recibidos):
         print(f"\n  Con errores en (byte, bit) {errores}: {list(con_error)}")
         print(f"  Decodificado: '{decodificar_y_corregir(con_error)}'  ('' = no se puede corregir)")
 
-    if len(bytes_recibidos) > 0:
-        print(f"\n  Secuencia recibida: {bytes_recibidos}")
-        print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
+
+def informe_paridad_recibidos(bytes_recibidos):
+    imprimo_titulo("PARIDAD: DETECTAR Y CORREGIR LA SECUENCIA RECIBIDA")
+    print(f"  Secuencia recibida: {bytes_recibidos}")
+    print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
 
 
 def informe_rlc(mensaje):
@@ -1114,9 +1116,9 @@ codigoBloque = []                    # ej: ["00000", "01101", "10110", "11011"]
 
 # --- 4) PARIDAD ---
 textoParidad = ""                    # ej: "HOLA"
-bitsRecibidos = "10100000101011101001111110011001"     # ej: "10100000101011101001111110011001"
+bitsRecibidos = ""     # ej: "10100000101011101001111110011001"
 errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte 1 (el byte 0 es el LRC)
-bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
+bytesRecibidos = [160, 174, 159, 153]                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
 # --- 5) RLC ---
 mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
@@ -1158,14 +1160,17 @@ if __name__ == "__main__":
     if len(codigoBloque) > 0:
         informe_hamming(codigoBloque)
     
-    # 4) PARIDAD
+       # 4) PARIDAD
+    if textoParidad != "":
+        informe_paridad_texto(textoParidad, errores)
+
     if bitsRecibidos != "":
         bytesRecibidos = []
         for k in range(0, len(bitsRecibidos), 8):
             bytesRecibidos.append(int(bitsRecibidos[k:k + 8], 2))
 
-    if textoParidad != "" or len(bytesRecibidos) > 0:
-        informe_paridad(textoParidad, errores, bytesRecibidos)
+    if len(bytesRecibidos) > 0:
+        informe_paridad_recibidos(bytesRecibidos)
 
     # 5) RLC
     if mensajeRLC != "":
