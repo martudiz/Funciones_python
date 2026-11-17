@@ -400,6 +400,16 @@ def tasa_compresion(mensaje, secuencia):
     return tamano_original / tamano_comprimido
 
 
+def guardar_archivo(nombre_archivo, secuencia):
+    with open(nombre_archivo, "wb") as archivo:
+        archivo.write(secuencia)
+
+
+def leer_archivo(nombre_archivo):
+    with open(nombre_archivo, "rb") as archivo:
+        return bytearray(archivo.read())
+
+
 def comprimir_rlc(mensaje):
     # 1 byte para el caracter (ASCII) + 1 byte para la cantidad de repeticiones
     resultado = bytearray()
@@ -1012,7 +1022,8 @@ def informe_fuente(alfabeto, probs, N):
     imprimo_titulo("FUENTE")
     print(f"  {'Simbolo':>8} {'P(s)':>10} {'I(s) bits':>10}")
     for s, p in zip(alfabeto, probs):
-        print(f"  {str(s):>8} {fmt(p):>10} {fmt(math.log2(1 / p)):>10}")
+        info = fmt(math.log2(1 / p)) if p > 0 else "inf"
+        print(f"  {str(s):>8} {fmt(p):>10} {info:>10}")
     H = calcular_entropia(probs, 2)
     print(f"\n  H(S)    = {fmt(H)} bits/simbolo")
     print(f"  log2(q) = {fmt(math.log2(len(alfabeto)))} bits (maximo, si fuera equiprobable)")
@@ -1106,6 +1117,36 @@ def informe_hamming(codigo):
     print(f"  Detecta  d - 1        = {detectables} errores")
     print(f"  Corrige  (d - 1) // 2 = {corregibles} errores")
 
+def imprimo_correccion_bits(recibida, estado, byte_i, bit_i):
+    # muestra la matriz recibida y la corregida, bit a bit
+    corregida = bytearray(recibida)
+    if estado == "un_error":
+        corregida[byte_i] ^= (1 << (7 - bit_i))
+    matriz = bytes_a_matriz(recibida)
+    se_corrige = estado != "no_corregible"
+    if se_corrige:
+        print(f"\n  {'':>6}  {'Recibido':>8}    {'Corregido':>10}   par")
+    else:
+        print(f"\n  {'':>6}  {'Recibido':>8}   par")
+    for i in range(len(recibida)):
+        r = format(recibida[i], "08b")
+        c = format(corregida[i], "08b")
+        if i == byte_i:
+            c = c[:bit_i] + "[" + c[bit_i] + "]" + c[bit_i + 1:]
+        else:
+            c = " " + c + " "
+        etiqueta = "LRC" if i == 0 else "'" + chr(corregida[i] >> 1) + "'"
+        fila_ok = "ok" if i == 0 or sum(matriz[i]) % 2 == 0 else "MAL"
+        nota = f"  <- bit {bit_i} corregido" if i == byte_i else ""
+        if se_corrige:
+            print(f"  {etiqueta:>6}  {r}  ->  {c}   {fila_ok:<3}{nota}")
+        else:
+            print(f"  {etiqueta:>6}  {r}   {fila_ok}")
+    cols = ""
+    for j in range(8):
+        cols += "." if sum(fila[j] for fila in matriz) % 2 == 0 else "X"
+    print(f"  {'cols':>6}  {cols}   (X = columna con paridad mal)")
+    return corregida
 
 def informe_paridad_texto(texto, errores):
     imprimo_titulo("PARIDAD: CODIFICAR UN TEXTO")
@@ -1127,6 +1168,8 @@ def informe_paridad_texto(texto, errores):
         for byte_i, bit_i in errores:      # bit_i: 0 = el de la izquierda, 7 = el de paridad
             con_error[byte_i] ^= (1 << (7 - bit_i))
         print(f"\n  Con errores en (byte, bit) {errores}: {list(con_error)}")
+        estado, byte_i, bit_i, _ = localizar_error_paridad(con_error)      # NUEVA
+        imprimo_correccion_bits(con_error, estado, byte_i, bit_i) 
         print(f"  Decodificado: '{decodificar_y_corregir(con_error)}'  ('' = no se puede corregir)")
 
 
@@ -1142,13 +1185,10 @@ def informe_paridad_recibidos(bytes_recibidos):
         print(f"  Se transmitio {1 - valor} y se recibio {valor}  ({1 - valor} -> {valor})")
     else:
         print("  Hay mas de un error: se detectan pero no se pueden corregir")
+    corregida = imprimo_correccion_bits(bytearray(bytes_recibidos), estado, byte_i, bit_i)
     if estado != "no_corregible":
-        corregida = bytearray(bytes_recibidos)
-        if estado == "un_error":
-            corregida[byte_i] ^= (1 << (7 - bit_i))      # invierte el bit con error
-        print(f"  Recibida  (bits): {' '.join(format(b, '08b') for b in bytes_recibidos)}")
-        print(f"  Corregida (bits): {' '.join(format(b, '08b') for b in corregida)}")
         print(f"  Corregida (bytes): {list(corregida)}")
+        print(f"  Mensaje corregido (bits): {''.join(format(b, '08b') for b in corregida)}")
         print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
 
 def informe_rlc(mensaje):
@@ -1211,9 +1251,15 @@ def informe_canal(prob_priori, matriz, alf_entrada, alf_salida, paso):
         print("\n  No admite reducciones suficientes")
 
 
-def informe_canales_serie(matriz1, matriz2):
+def informe_canales_serie(prob_priori, matriz1, matriz2):
     imprimo_titulo("CANALES EN SERIE")
     compuesta = crea_matriz_compuesta(matriz1, matriz2)
+    _, prob_b, _ = calcula_valores(prob_priori, matriz1)   # la salida del 1 es la entrada del 2
+    for nombre, priori, m in [("Canal 1  (A -> B)", prob_priori, matriz1),
+                              ("Canal 2  (B -> C)", prob_b, matriz2),
+                              ("Compuesto (A -> C)", prob_priori, compuesta)]:
+        print(f"  {nombre}: equivocacion = {fmt(calcular_equivocacion(priori, m))}   I = {fmt(calcular_informacion_mutua(priori, m))}")
+    print("\n  Matriz del canal compuesto:")
     etiq_filas = [f"a{i + 1}" for i in range(len(compuesta))]
     etiq_cols = [f"c{k + 1}" for k in range(len(compuesta[0]))]
     imprimo_matriz(compuesta, etiq_filas, etiq_cols)
@@ -1226,13 +1272,13 @@ def informe_canales_serie(matriz1, matriz2):
 Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
-mensaje =  "AAAAAAAAAAAABAAAAAAAACAAAAAABBAAAAAAACAB"   # msj de la consigna
+mensaje =  ""   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
 probsCodigo = []
 mensajeBits = ""
 codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
-ordenExt = 3                         # orden de la extension
+ordenExt = 1                         # orden de la extension
 metodo = "huffman"                  # "huffman" o "shannon-fano"
 
 # --- 2) CODIGO DADO CON SUS PROBABILIDADES ---
@@ -1250,7 +1296,7 @@ errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte
 bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
 # --- 5) RLC ---
-mensajeRLC = "AAAAAAAAAAAABAAAAAAAACAAAAAABBAAAAAAACAB"                      # ej: "AAAABBBCCDAA"
+mensajeRLC = "AAAABBBCCDAA"                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
 entradaCanal = ""
@@ -1329,11 +1375,14 @@ if __name__ == "__main__":
         informe_canal(probPriori, matrizCanal, alfEntrada, alfSalida, pasoCapacidad)
     elif len(matrizCanal) > 0:
         if len(probPriori) == 0:
-            capacidad, p = estimativo_capacidad_canal(matrizCanal, pasoCapacidad)
-            probPriori = [p, 1 - p]
+            if len(matrizCanal) == 2:
+                capacidad, p = estimativo_capacidad_canal(matrizCanal, pasoCapacidad)
+                probPriori = [p, 1 - p]
+            else:
+                probPriori = [1 / len(matrizCanal)] * len(matrizCanal)
         alfEntrada = [f"a{i + 1}" for i in range(len(matrizCanal))]
         alfSalida = [f"b{j + 1}" for j in range(len(matrizCanal[0]))]
         informe_canal(probPriori, matrizCanal, alfEntrada, alfSalida, pasoCapacidad)
 
     if len(matrizCanal2) > 0:
-        informe_canales_serie(matrizCanal, matrizCanal2)
+        informe_canales_serie(probPriori, matrizCanal, matrizCanal2)
