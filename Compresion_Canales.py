@@ -558,7 +558,105 @@ def decodificar_y_corregir(secuencia_bytes):
         mensaje += chr(ascii_val)
     return mensaje
 
+def localizar_error_paridad(secuencia_bytes):
+    # devuelve (estado, byte, bit, valor_recibido)
+    #   estado: "sin_error" | "un_error" | "no_corregible"
+    #   byte: 0 = fila LRC, 1.. = caracteres; bit: 0 = el de la izquierda, 7 = el de paridad
+    matriz = bytes_a_matriz(secuencia_bytes)
 
+    # filas de datos con paridad mal (la fila 0 es el LRC)
+    error_fila = -1
+    conteo_errores_filas = 0
+    for i in range(1, len(matriz)):
+        suma_fila = 0
+        for j in range(8):
+            suma_fila += matriz[i][j]
+        if suma_fila % 2 != 0:
+            error_fila = i
+            conteo_errores_filas += 1
+
+    # columnas con paridad mal (incluye la fila LRC)
+    error_columna = -1
+    conteo_errores_cols = 0
+    for j in range(8):
+        suma_columna = 0
+        for i in range(len(matriz)):
+            suma_columna += matriz[i][j]
+        if suma_columna % 2 != 0:
+            error_columna = j
+            conteo_errores_cols += 1
+
+    if conteo_errores_filas == 0 and conteo_errores_cols == 0:
+        return "sin_error", -1, -1, -1
+
+    if conteo_errores_filas == 1 and conteo_errores_cols == 1:
+        # el error esta en el cruce de la fila y la columna marcadas
+        return "un_error", error_fila, error_columna, matriz[error_fila][error_columna]
+
+    if conteo_errores_filas == 0 and conteo_errores_cols == 1:
+        # el error esta en la propia fila LRC
+        return "un_error", 0, error_columna, matriz[0][error_columna]
+
+    return "no_corregible", -1, -1, -1
+
+def probabilidad_de_transicion(matriz_canal, transmitido, recibido):
+    # regla de MAXIMA POSIBILIDAD: cada salida b_j se decide como la entrada de
+    # mayor P(b_j / a_i). Devuelve la probabilidad de que, al transmitir
+    # 'transmitido', el receptor decida 'recibido' (fila = valor del bit: 0 o 1)
+    cant_columnas = len(matriz_canal[0])
+    cant_filas = len(matriz_canal)
+    probabilidad = 0
+    for j in range(cant_columnas):
+        maximo = -1
+        fila_max = 0
+        for i in range(cant_filas):
+            if matriz_canal[i][j] > maximo:
+                maximo = matriz_canal[i][j]
+                fila_max = i
+        if fila_max == recibido:
+            probabilidad = probabilidad + matriz_canal[transmitido][j]
+    return probabilidad
+
+
+def informe_transmision(matriz_canal, bytes_recibidos):
+    imprimo_titulo("ANALISIS: EL MENSAJE RECIBIDO, PUDO TRANSMITIRSE POR EL CANAL?")
+
+    estado, byte_i, bit_i, valor = localizar_error_paridad(bytearray(bytes_recibidos))
+    if estado == "no_corregible":
+        print("  Hay mas de un error: no se puede reconstruir lo que se transmitio")
+        return
+
+    # bits recibidos, en orden
+    bits_recibidos = []
+    for byte in bytes_recibidos:
+        for k in range(7, -1, -1):
+            bits_recibidos.append((byte >> k) & 1)
+
+    # bits transmitidos = los recibidos, con el error corregido
+    bits_transmitidos = []
+    for b in bits_recibidos:
+        bits_transmitidos.append(b)
+    if estado == "un_error":
+        bits_transmitidos[byte_i * 8 + bit_i] = 1 - valor
+
+    # se cuentan las transiciones (transmitido -> recibido) que aparecen en el mensaje
+    cantidades = [[0, 0], [0, 0]]
+    for k in range(len(bits_recibidos)):
+        cantidades[bits_transmitidos[k]][bits_recibidos[k]] += 1
+
+    pudo = True
+    for t in range(2):
+        for r in range(2):
+            if cantidades[t][r] > 0:
+                p = probabilidad_de_transicion(matriz_canal, t, r)
+                print(f"  {t} -> {r}: aparece {cantidades[t][r]} veces, P({r} recibido / {t} enviado) = {fmt(p)}")
+                if p == 0:
+                    pudo = False
+
+    if pudo:
+        print("  Todas las transiciones tienen probabilidad > 0: el mensaje SI pudo transmitirse por el canal")
+    else:
+        print("  Hay transiciones con probabilidad 0: el mensaje NO pudo transmitirse por el canal")
 # =============================================================================
 # CANALES   (matriz del canal: fila = entrada a_i, columna = salida b_j,
 #            elemento = P(b_j / a_i))
@@ -1020,8 +1118,17 @@ def informe_paridad_texto(texto, errores):
 def informe_paridad_recibidos(bytes_recibidos):
     imprimo_titulo("PARIDAD: DETECTAR Y CORREGIR LA SECUENCIA RECIBIDA")
     print(f"  Secuencia recibida: {bytes_recibidos}")
-    print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
 
+    estado, byte_i, bit_i, valor = localizar_error_paridad(bytearray(bytes_recibidos))
+    if estado == "sin_error":
+        print("  No se detectaron errores")
+    elif estado == "un_error":
+        print(f"  Error en el byte {byte_i} (0 = LRC), bit {bit_i} (0 = el de la izquierda)")
+        print(f"  Se transmitio {1 - valor} y se recibio {valor}  ({1 - valor} -> {valor})")
+    else:
+        print("  Hay mas de un error: se detectan pero no se pueden corregir")
+
+    print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
 
 def informe_rlc(mensaje):
     imprimo_titulo("RLC")
@@ -1098,13 +1205,13 @@ def informe_canales_serie(matriz1, matriz2):
 Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
-mensaje = "GIIHGGGHGIHHIHIIGFHH"   # msj de la consigna
+mensaje = ""   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
 mensajeBits = ""
 codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
-ordenExt = 2                         # orden de la extension
-metodo = "huffman"                   # "huffman" o "shannon-fano"
+ordenExt = 3                         # orden de la extension
+metodo = "huffman"                  # "huffman" o "shannon-fano"
 
 # --- 2) CODIGO DADO CON SUS PROBABILIDADES ---
 codigoAnalizar = []                  # ej: ['(]', ']', '[)', ')', '([']
@@ -1113,12 +1220,11 @@ ordenCodigo = 0                    # N si el codigo es para la extension de orde
 
 # --- 3) HAMMING ---
 codigoBloque = []                    # ej: ["00000", "01101", "10110", "11011"]
-
 # --- 4) PARIDAD ---
 textoParidad = ""                    # ej: "HOLA"
-bitsRecibidos = ""     # ej: "10100000101011101001111110011001"
+bitsRecibidos = "10100000101011101001111110011001"     # ej: "10100000101011101001111110011001"
 errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte 1 (el byte 0 es el LRC)
-bytesRecibidos = [160, 174, 159, 153]                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
+bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
 # --- 5) RLC ---
 mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
@@ -1128,7 +1234,7 @@ entradaCanal = "10100000101011101001111110011001"
 salidaCanal = "QQPQQPPQQQPQRRRQSPQSQRQSQQPSQQPP"
 probPriori = []                      # si te dan la matriz, ej: [0.5, 0.5]
 matrizCanal = []                     #                     ej: [[0.9, 0.1], [0.1, 0.9]]
-pasoCapacidad = 0.001
+pasoCapacidad = 0.0001
 matrizCanal2 = []                    # segundo canal, solo si piden canales en serie
 
 if __name__ == "__main__":
@@ -1168,9 +1274,18 @@ if __name__ == "__main__":
         bytesRecibidos = []
         for k in range(0, len(bitsRecibidos), 8):
             bytesRecibidos.append(int(bitsRecibidos[k:k + 8], 2))
+        if entradaCanal != "" and salidaCanal != "":
+            matrizCanal = genero_matriz(entradaCanal, salidaCanal)
+            _, alfEntrada = calcular_alfabeto(entradaCanal)
+            _, alfSalida = calcular_alfabeto(salidaCanal)
+            frecs = [entradaCanal.count(a) for a in alfEntrada]
+            informe_transmision(matrizCanal, bytesRecibidos)
 
     if len(bytesRecibidos) > 0:
         informe_paridad_recibidos(bytesRecibidos)
+    
+    if len(bytesRecibidos) > 0 and len(matrizCanal) > 0:
+        informe_transmision(matrizCanal, bytesRecibidos)
 
     # 5) RLC
     if mensajeRLC != "":
@@ -1185,6 +1300,9 @@ if __name__ == "__main__":
         probPriori = frecuencias_a_probabilidades(frecs, len(entradaCanal))
         informe_canal(probPriori, matrizCanal, alfEntrada, alfSalida, pasoCapacidad)
     elif len(matrizCanal) > 0:
+        if len(probPriori) == 0:
+            capacidad, p = estimativo_capacidad_canal(matrizCanal, pasoCapacidad)
+            probPriori = [p, 1 - p]
         alfEntrada = [f"a{i + 1}" for i in range(len(matrizCanal))]
         alfSalida = [f"b{j + 1}" for j in range(len(matrizCanal[0]))]
         informe_canal(probPriori, matrizCanal, alfEntrada, alfSalida, pasoCapacidad)
