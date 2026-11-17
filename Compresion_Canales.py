@@ -1284,7 +1284,7 @@ Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
 mensaje =  ""   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
-probsCodigo = [0.385, 0.154, 0.128, 0.154, 0.179]
+probsFuente = []
 mensajeBits = ""
 codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
@@ -1306,7 +1306,7 @@ errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte
 bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
 # --- 5) RLC ---
-mensajeRLC = "AAAABBBCCDAA"                      # ej: "AAAABBBCCDAA"
+mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
 entradaCanal = ""
@@ -1330,10 +1330,10 @@ if __name__ == "__main__":
     elif mensaje != "":
         alfabeto, frecs = alfabeto_y_frecuencias(mensaje)
         probs = frecuencias_a_probabilidades(frecs, len(mensaje))
-    elif len(probsCodigo) > 0:
-        alfabeto = [f"S{i + 1}" for i in range(len(probsCodigo ))]
-        probs = probsCodigo
-    if mensajeBits != "" or mensaje != "" or len(probsCodigo) > 0:
+    elif len(probsFuente) > 0:
+        alfabeto = [f"S{i + 1}" for i in range(len(probsFuente))]
+        probs = probsFuente
+    if mensajeBits != "" or mensaje != "" or len(probsFuente) > 0:
         informe_fuente(alfabeto, probs, ordenExt)
         codigos = informe_codigo_optimo(alfabeto, probs, 1, metodo)
         if len(codigoAnalizar) == 0:             # no dan codigo: se concatena el optimo
