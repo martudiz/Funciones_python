@@ -667,6 +667,7 @@ def calcular_alfabeto(cadena):
     for caracter in cadena:
         if caracter not in alfabeto:
             alfabeto.append(caracter)
+    alfabeto.sort()          
     return len(alfabeto), alfabeto
 
 
@@ -1127,8 +1128,14 @@ def informe_paridad_recibidos(bytes_recibidos):
         print(f"  Se transmitio {1 - valor} y se recibio {valor}  ({1 - valor} -> {valor})")
     else:
         print("  Hay mas de un error: se detectan pero no se pueden corregir")
-
-    print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
+    if estado != "no_corregible":
+        corregida = bytearray(bytes_recibidos)
+        if estado == "un_error":
+            corregida[byte_i] ^= (1 << (7 - bit_i))      # invierte el bit con error
+        print(f"  Recibida  (bits): {' '.join(format(b, '08b') for b in bytes_recibidos)}")
+        print(f"  Corregida (bits): {' '.join(format(b, '08b') for b in corregida)}")
+        print(f"  Corregida (bytes): {list(corregida)}")
+        print(f"  Decodificado: '{decodificar_y_corregir(bytearray(bytes_recibidos))}'  ('' = no se puede corregir)")
 
 def informe_rlc(mensaje):
     imprimo_titulo("RLC")
@@ -1274,18 +1281,14 @@ if __name__ == "__main__":
         bytesRecibidos = []
         for k in range(0, len(bitsRecibidos), 8):
             bytesRecibidos.append(int(bitsRecibidos[k:k + 8], 2))
-        if entradaCanal != "" and salidaCanal != "":
-            matrizCanal = genero_matriz(entradaCanal, salidaCanal)
-            _, alfEntrada = calcular_alfabeto(entradaCanal)
-            _, alfSalida = calcular_alfabeto(salidaCanal)
-            frecs = [entradaCanal.count(a) for a in alfEntrada]
-            informe_transmision(matrizCanal, bytesRecibidos)
+
+    if entradaCanal != "" and salidaCanal != "":
+        matrizCanal = genero_matriz(entradaCanal, salidaCanal)
 
     if len(bytesRecibidos) > 0:
         informe_paridad_recibidos(bytesRecibidos)
-    
-    if len(bytesRecibidos) > 0 and len(matrizCanal) > 0:
-        informe_transmision(matrizCanal, bytesRecibidos)
+        if len(matrizCanal) > 0:
+            informe_transmision(matrizCanal, bytesRecibidos)
 
     # 5) RLC
     if mensajeRLC != "":
