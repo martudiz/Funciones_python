@@ -845,11 +845,14 @@ def canal_determinante(matriz_canal):
 
 
 def verifica_canal_uniforme(matriz_canal):
-    # uniforme: todas las filas son permutaciones de la primera
     primera_fila = sorted(matriz_canal[0])
     for i in range(len(matriz_canal)):
         if sorted(matriz_canal[i]) != primera_fila:
             return False
+    primera_col = sorted([fila[0] for fila in matriz_canal])         
+    for j in range(len(matriz_canal[0])):                             
+        if sorted([fila[j] for fila in matriz_canal]) != primera_col: 
+            return False                                              
     return True
 
 
@@ -1242,14 +1245,21 @@ def informe_canal(prob_priori, matriz, alf_entrada, alf_salida, paso):
 
     print(f"\n  P(error), maxima posibilidad = {fmt(calcula_prob_error(prob_priori, matriz))}")
 
-    reducida = reduce_canal(matriz)
-    if len(reducida[0]) < len(matriz[0]):
-        print("\n  Canal reducido (todas las reducciones suficientes posibles):")
-        etiquetas = [f"b{j + 1}'" for j in range(len(reducida[0]))]
-        imprimo_matriz(reducida, alf_entrada, etiquetas)
-    else:
+    reducida = matriz
+    paso = 0
+    while True:
+        col1, col2 = busca_par_combinable(reducida)
+        if col1 == -1:
+            break
+        paso += 1
+        reducida = crea_matriz_compuesta(reducida, genera_matriz_determinante(reducida, col1, col2))
+        print(f"\n  Reduccion {paso}: se combinan las columnas {col1 + 1} y {col2 + 1}")
+        imprimo_matriz(reducida, alf_entrada, [f"b{j + 1}'" for j in range(len(reducida[0]))])
+        print(f"  H(A/B) = {fmt(calcular_equivocacion(prob_priori, reducida))}   I(A;B) = {fmt(calcular_informacion_mutua(prob_priori, reducida))}")
+    if paso == 0:
         print("\n  No admite reducciones suficientes")
-
+    else:
+        print(f"  El canal reducido es determinante: {canal_determinante(reducida)}")
 
 def informe_canales_serie(prob_priori, matriz1, matriz2):
     imprimo_titulo("CANALES EN SERIE")
@@ -1274,7 +1284,7 @@ Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
 mensaje =  ""   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
-probsCodigo = []
+probsCodigo = [0.385, 0.154, 0.128, 0.154, 0.179]
 mensajeBits = ""
 codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
@@ -1320,8 +1330,10 @@ if __name__ == "__main__":
     elif mensaje != "":
         alfabeto, frecs = alfabeto_y_frecuencias(mensaje)
         probs = frecuencias_a_probabilidades(frecs, len(mensaje))
-
-    if mensajeBits != "" or mensaje != "":
+    elif len(probsCodigo) > 0:
+        alfabeto = [f"S{i + 1}" for i in range(len(probsCodigo ))]
+        probs = probsCodigo
+    if mensajeBits != "" or mensaje != "" or len(probsCodigo) > 0:
         informe_fuente(alfabeto, probs, ordenExt)
         codigos = informe_codigo_optimo(alfabeto, probs, 1, metodo)
         if len(codigoAnalizar) == 0:             # no dan codigo: se concatena el optimo
@@ -1329,7 +1341,8 @@ if __name__ == "__main__":
                 informe_codigo_dado(probs, concatenar_codigo(codigos, N), N)
         if ordenExt > 1:
             informe_codigo_optimo(alfabeto, probs, ordenExt, metodo)
-        informe_compresion(alfabeto, codigos, mensaje)
+        if len(mensaje) > 0:                                 
+            informe_compresion(alfabeto, codigos, mensaje) 
 
     # 2) CODIGO DADO
     if len(codigoAnalizar) > 0:
