@@ -91,6 +91,15 @@ def calcular_alfabeto_extension(alfabeto, N):
         alfabeto_extension = nuevos
     return alfabeto_extension
 
+def concatenar_codigo(palabras_codigo, N):
+    codigo_extension = [""]
+    for paso in range(N):
+        nuevos = []
+        for bloque in codigo_extension:
+            for palabra in palabras_codigo:
+                nuevos.append(bloque + palabra)
+        codigo_extension = nuevos
+    return codigo_extension
 
 def calcular_longitud_media(probabilidades, palabras_codigo):
     # L = suma de P(simbolo) * longitud de su palabra codigo
@@ -1077,7 +1086,12 @@ def informe_codigo_dado(probs, codigo, N):
         print(f"  H_r(S) = {fmt(calcular_entropia(probs, r))}   L = {fmt(calcular_longitud_media(probs, codigo))}")
         print(f"  Rendimiento = {fmt(rendimiento)} ({rendimiento * 100:.2f}%)   Redundancia = {fmt(redundancia)} ({redundancia * 100:.2f}%)")
     else:
+        probs_ext = calcular_probs_extension(probs, N)
+        Ln = calcular_longitud_media(probs_ext, codigo)
+        rendimiento = calcular_rendimiento(calcular_entropia(probs_ext, r), Ln)
         print(f"  Codigo para la extension de orden {N}: {codigo}   r = {r}")
+        print(f"  L_{N} = {fmt(Ln)}   L_{N}/{N} = {fmt(Ln / N)} por simbolo ORIGINAL")
+        print(f"  Rendimiento = {fmt(rendimiento)}   Redundancia = {fmt(calcular_redundancia(rendimiento))}")
     H = calcular_entropia(probs, r)
     Ln = calcular_longitud_media(calcular_probs_extension(probs, N), codigo)
     cumple = cumple_primer_teorema_shannon(probs, codigo, N)
@@ -1212,8 +1226,9 @@ def informe_canales_serie(matriz1, matriz2):
 Cada bloque se saltea si su dato principal esta vacio ("" o [])."""
 
 # --- 1) FUENTE -> CODIGO OPTIMO -> COMPRESION ---
-mensaje = ""   # msj de la consigna
+mensaje =  "AAAAAAAAAAAABAAAAAAAACAAAAAABBAAAAAAACAB"   # msj de la consigna
 # si en vez del msj te dan los BITS y el codigo, completar esto (tiene prioridad):
+probsCodigo = []
 mensajeBits = ""
 codigoDado = []
 alfabetoDado = []  # ([] => S1, S2, ...)
@@ -1221,28 +1236,30 @@ ordenExt = 3                         # orden de la extension
 metodo = "huffman"                  # "huffman" o "shannon-fano"
 
 # --- 2) CODIGO DADO CON SUS PROBABILIDADES ---
-codigoAnalizar = []                  # ej: ['(]', ']', '[)', ')', '([']
-probsCodigo = []                     # ej: [0.15, 0.25, 0.05, 0.45, 0.10]
-ordenCodigo = 0                    # N si el codigo es para la extension de orden N
+codigoAnalizar = []           # ej: ['(]', ']', '[)', ')', '([']
+probsCodigo =  []                 # ej: [0.15, 0.25, 0.05, 0.45, 0.10]
+ordenCodigo = 1                    # N si el codigo es para la extension de orden N
+ordenesConcatenar = []           # item c: extensiones por concatenacion ([] = no)
 
 # --- 3) HAMMING ---
 codigoBloque = []                    # ej: ["00000", "01101", "10110", "11011"]
 # --- 4) PARIDAD ---
 textoParidad = ""                    # ej: "HOLA"
-bitsRecibidos = "10100000101011101001111110011001"     # ej: "10100000101011101001111110011001"
+bitsRecibidos = ""     # ej: "10100000101011101001111110011001"
 errores = []                         # ej: [(1, 5)] = invierte el bit 5 del byte 1 (el byte 0 es el LRC)
 bytesRecibidos = []                  # si te dan la secuencia recibida, ej: [20, 144, 159, 153, 130]
 
 # --- 5) RLC ---
-mensajeRLC = ""                      # ej: "AAAABBBCCDAA"
+mensajeRLC = "AAAAAAAAAAAABAAAAAAAACAAAAAABBAAAAAAACAB"                      # ej: "AAAABBBCCDAA"
 
 # --- 6) CANAL ---
-entradaCanal = "10100000101011101001111110011001"
-salidaCanal = "QQPQQPPQQQPQRRRQSPQSQRQSQQPSQQPP"
+entradaCanal = ""
+salidaCanal = ""
 probPriori = []                      # si te dan la matriz, ej: [0.5, 0.5]
 matrizCanal = []                     #                     ej: [[0.9, 0.1], [0.1, 0.9]]
 pasoCapacidad = 0.0001
 matrizCanal2 = []                    # segundo canal, solo si piden canales en serie
+
 
 if __name__ == "__main__":
 
@@ -1261,19 +1278,27 @@ if __name__ == "__main__":
     if mensajeBits != "" or mensaje != "":
         informe_fuente(alfabeto, probs, ordenExt)
         codigos = informe_codigo_optimo(alfabeto, probs, 1, metodo)
+        if len(codigoAnalizar) == 0:             # no dan codigo: se concatena el optimo
+            for N in ordenesConcatenar:
+                informe_codigo_dado(probs, concatenar_codigo(codigos, N), N)
         if ordenExt > 1:
             informe_codigo_optimo(alfabeto, probs, ordenExt, metodo)
         informe_compresion(alfabeto, codigos, mensaje)
 
     # 2) CODIGO DADO
     if len(codigoAnalizar) > 0:
+        if len(probsCodigo) == 0:                # no se escribieron: se usan las del mensaje
+            probsCodigo = probs
         informe_codigo_dado(probsCodigo, codigoAnalizar, ordenCodigo)
+        if ordenCodigo == 1:                     # solo se concatena un codigo de la fuente
+            for N in ordenesConcatenar:
+                informe_codigo_dado(probsCodigo, concatenar_codigo(codigoAnalizar, N), N)
 
     # 3) HAMMING
     if len(codigoBloque) > 0:
         informe_hamming(codigoBloque)
     
-       # 4) PARIDAD
+    # 4) PARIDAD
     if textoParidad != "":
         informe_paridad_texto(textoParidad, errores)
 
